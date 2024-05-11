@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Interface</title>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <style>
+        body{
+            margin: 0px;
+            height: 100vh;
+        }
+        .container{
+            margin: 0px auto 0px;
+            display: grid;
+            grid-template-columns: minmax(150px, 25%) 1fr;
+        }
+        .file-menu{
+            padding: 10px;
+            /* border: 1px solid rgb(34, 24, 24); */
+        }
+        .chat-box{
+            display: inline-block;
+            vertical-align: middle;
+        }
+        #chat-container{
+			height: 92vh;
+            margin: 5px 5px 5px 5px;
+            border: 2px solid rgb(29, 66, 48);
+            border-radius: 5px;
+            overflow-y: scroll;
+            background: #fff;
+        }
+        .message {
+            margin: 5px;
+            padding: 10px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            width: fit-content;
+        }
+        .user {
+            align-self: flex-end;
+            background-color: #007bff;
+            color: white;
+        }
+        #input-container{
+            margin: 2px auto 2px;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        #user-input {
+            flex-grow: 1;
+            margin: 5px 10px 5px 5px;
+            margin-right: 10px;
+            padding: 10px;
+            width: 70%;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+        #send-button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            margin-left: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+
+    
+</head>
+<body>
+    <div class="container">
+        <div class="file-menu">
+            <button class="button" id="start-record">启动记录</button>
+            <button class="button" id="stop-record">结束记录</button>
+            <button class="button" id="save-record">保存记录</button>
+            <button class="button" id="generate-summary">生成摘要</button>
+            <button class="button" id="save-summary">保存摘要</button>
+        </div>
+
+        <div class="chat-box">
+            <div id="chat-container"></div>
+            <div id="input-container">
+                <input type="text" id="user-input" placeholder="Type a message..." autofocus>
+                <button id="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('start-record');
+        const stopButton = document.getElementById('stop-record');
+        const saveButton = document.getElementById('save-record');
+        const genButton = document.getElementById('generate-summary');
+        const saveSumButton = document.getElementById('save-summary');
+
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        
+        let shouldFetchMessages = 0;
+
+        function appendMessage(text, user) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            if (user) {
+                messageDiv.classList.add('user');
+            }
+            messageDiv.textContent = text;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        sendButton.addEventListener('click', () => {
+            const userInputText = userInput.value.trim();
+            if (userInputText) {
+                appendMessage(userInputText, true);
+                userInput.value = '';
+                
+                fetch('/chat-rag', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: userInputText}) 
+                })
+                .then(response => response.json()) 
+                .then(data => {
+                    appendMessage("Response: " + data.response, false); 
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    appendMessage("Error: Unable to get response", false);
+                });
+            }
+        });
+
+        userInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+
+        startButton.addEventListener('click', function() {
+            $.post('/btn-start-record', {}, function() {
+                shouldFetchMessages = 1
+                alert('Start Record!');
+            });
+        });
+
+        stopButton.addEventListener('click', function() {
+            $.post('/btn-stop-record', {}, function() {
+                shouldFetchMessages = 0
+                alert('Stop Record!');
+            });
+        });
+
+        saveButton.addEventListener('click', function() {
+            shouldFetchMessages = 0
+            $.post('/save-record', {}, function() {
+                alert('Save Record!');
+            });
+        });
+
+        genButton.addEventListener('click', function() {
+            shouldFetchMessages = 2
+            $.post('/gen-summary', {}, function() {
+                alert('Generate Summary!');
+            });
+        });
+
+        saveSumButton.addEventListener('click', function() {
+            shouldFetchMessages = 0
+            $.post('/save-summary', {}, function() {
+                alert('Save Summary!');
+            });
+        });        
+
+        function fetchMessages() {
+            fetch('/get_recorder_messages')
+                .then(response => response.json())
+                .then(data => {
+                    chatContainer.innerHTML = '';
+                    data.forEach(msg => {
+                        appendMessage(msg, true);
+                    });
+                })
+                .catch(error => console.error('Error fetching messages:', error));
+        }
+
+        setInterval(() => {
+            if (shouldFetchMessages === 1) {
+                fetchMessages();
+            }
+            if (shouldFetchMessages === 2) {
+                console.log("Hello world");
+                fetch('/get_messages')
+                .then(response => response.json())
+                .then(data => {
+                    chatContainer.innerHTML = '';
+                    data.forEach(msg => {
+                        appendMessage(msg, true);
+                    });
+                })
+                .catch(error => console.error('Error fetching messages:', error));
+            }
+        }, 1000);
+
+    </script>
+</body>
+</html>
